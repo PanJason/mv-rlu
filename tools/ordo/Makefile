@@ -24,7 +24,7 @@ all: CPUSEQ $(BINS)
 
 CPUSEQ:
 	@echo "generating sequential cpu"
-	$(Q)./gen_cpuseq.py
+	$(Q)python3 ./gen_cpuseq.py
 
 $(O)/%: %.c $(DEPS) $(CPUSEQ)
 	@mkdir -p $(@D)

@@ -7,7 +7,7 @@ import errno
 
 cpuinfo = [dict(map(str.strip, line.split(":", 1))
                 for line in block.splitlines())
-           for block in file("/proc/cpuinfo", "r").read().split("\n\n")
+           for block in open("/proc/cpuinfo", "r").read().split("\n\n")
            if len(block.strip())]
 
 # Keep only primary hyperthreads
@@ -15,9 +15,9 @@ primaries = set()
 for cpu in cpuinfo:
     processor = cpu["processor"]
     try:
-        s = file("/sys/devices/system/cpu/cpu%s/topology/thread_siblings_list"
+        s = open("/sys/devices/system/cpu/cpu%s/topology/thread_siblings_list"
                  % processor).read()
-    except EnvironmentError, e:
+    except EnvironmentError as e:
         if e.errno == errno.ENOENT:
             primaries.add(processor)
             continue
@@ -38,7 +38,7 @@ def seq(cpuinfo):
         if "physical id" in cpu:
             package_id = int(cpu["physical id"])
             packages.setdefault(package_id, []).append(cpu)
-            if cpu["processor"] is "0":
+            if cpu["processor"] == "0":
                 cpu0_package_id = int(package_id)
             package_ids.add(int(package_id))
         else:
