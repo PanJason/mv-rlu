@@ -3,6 +3,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2018-2019 Virginia Tech
 # SPDX-License-Identifier: Apache-2.0
 
+import sys
 import json
 from run_tests import execute
 import optparse
@@ -82,9 +83,9 @@ with open(opts.config) as json_data_file:
 for test in data:
     if data[test][0]["data_structure"] == "llist":
         if data[test][0]["buckets"] != 1:
-            sys.exit("Buckets should be 1\n");
+            sys.exit("Buckets should be 1\n")
     for ur in data[test][0]["update_rate"]:
-        final_dir = result_dir + test + "/u" + str(ur) + "/";
+        final_dir = result_dir + test + "/u" + str(ur) + "/"
 
         try:
             os.stat(final_dir)
@@ -101,7 +102,6 @@ for test in data:
             if opts.plot == False:
                 execute(data[test][0]["runs_per_test"], data[test][0]["rlu_max_ws"], data[test][0]["buckets"], data[test][0]["duration"], \
                     t, ur, data[test][0]["initial_size"], data[test][0]["range_size"], out_file, data[test][0]["zipf_dist_val"], data[test][0]["threads"])
-
             parseresults(out_file, plot_data, t, \
                     data[test][0]["duration"], data_file)
         plotgraph(plot_data, data[test][0]["threads"], ur, data[test][0]["data_structure"], data[test][0]["initial_size"], 'tot_ops', final_dir)

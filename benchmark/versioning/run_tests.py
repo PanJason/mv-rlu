@@ -62,19 +62,19 @@ CMD_NUMA_PREFIX_105= 'taskset -c 0-104 '
 CMD_NUMA_PREFIX_120= 'taskset -c 0-119 '
 
 CMD_BASE = {
-	'harris' : CMD_BASE_HARRIS,
-	'harris_list' : CMD_BASE_HARRIS_LIST,
-	'hp_harris' : CMD_BASE_HP_HARRIS,
-	'rcu' : CMD_BASE_RCU,
-	'rlu' : CMD_BASE_RLU,
-	'rcu_list' : CMD_BASE_RCU_LIST,
-	'rlu_list' : CMD_BASE_RLU_LIST,
-	'rlu_ordo_list' : CMD_BASE_RLU_ORDO_LIST,
+    'harris' : CMD_BASE_HARRIS,
+    'harris_list' : CMD_BASE_HARRIS_LIST,
+    'hp_harris' : CMD_BASE_HP_HARRIS,
+    'rcu' : CMD_BASE_RCU,
+    'rlu' : CMD_BASE_RLU,
+    'rcu_list' : CMD_BASE_RCU_LIST,
+    'rlu_list' : CMD_BASE_RLU_LIST,
+    'rlu_ordo_list' : CMD_BASE_RLU_ORDO_LIST,
         'vlist' : CMD_BASE_VLIST,
         'vlist_list' : CMD_BASE_VLIST_LIST,
         'vrbtree' : CMD_BASE_VRBTREE,
         'rlu_ordo' : CMD_BASE_RLU_ORDO,
-	'mvrlu' : CMD_BASE_MVRLU,
+    'mvrlu' : CMD_BASE_MVRLU,
         'mvrlu_ordo' : CMD_BASE_MVRLU_ORDO,
         'mvrlu_ordo_list' : CMD_BASE_MVRLU_ORDO_LIST,
         'citrus_mvrlu_ordo' : CMD_BASE_CITRUS_MVRLU_ORDO,
@@ -85,262 +85,262 @@ CMD_BASE = {
 }
 
 result_keys = [
-	'ops:',
+    'ops:',
 #        'abort_ratio:',
-#	'#update ops   :',
-#	't_writer_writebacks =',
-#	't_writeback_q_iters =',
-#	'a_writeback_q_iters =',
-#	't_pure_readers =',
-#	't_steals =',
-#	't_aborts =',
-#	't_sync_requests =',
-#	't_sync_and_writeback =',
+#   '#update ops   :',
+#   't_writer_writebacks =',
+#   't_writeback_q_iters =',
+#   'a_writeback_q_iters =',
+#   't_pure_readers =',
+#   't_steals =',
+#   't_aborts =',
+#   't_sync_requests =',
+#   't_sync_and_writeback =',
 ]
 
 perf_result_keys = [
-	'instructions              #',
-	'branches                  #',
-	'branch-misses             #',
-	'L1-dcache-loads           #',
-	'L1-dcache-load-misses     #',
+    'instructions              #',
+    'branches                  #',
+    'branch-misses             #',
+    'L1-dcache-loads           #',
+    'L1-dcache-load-misses     #',
 ]
 
 def cmd_numa_prefix(threads_num):
-	if (IS_2_SOCKET):
-		if (threads_num <= 36):
-	                print 'cmd_numa_prefix: BIND_CPU th_num = %d' % (threads_num,)
-			return CMD_NUMA_BIND_TO_CPU_1
-		
-		return CMD_NUMA_BIND_TO_CPU_0_1
-	
-        print 'cmd_numa_prefix: th_num = %d' % (threads_num)
-	
-	if (threads_num <= 15):
-		return CMD_NUMA_PREFIX_15
-	
-	if (threads_num <= 30):
-		return CMD_NUMA_PREFIX_30
-
-	if (threads_num <= 45):
-		return CMD_NUMA_PREFIX_45
-
-	if (threads_num <= 60):
-		return CMD_NUMA_PREFIX_60
-
-	if (threads_num <= 75):
-		return CMD_NUMA_PREFIX_75
-	
-        if (threads_num <= 90):
-		return CMD_NUMA_PREFIX_90
-
-        if (threads_num <= 105):
-		return CMD_NUMA_PREFIX_105
+    if (IS_2_SOCKET):
+        if (threads_num <= 27):
+            print('cmd_numa_prefix: BIND_CPU th_num = %d' % (threads_num,))
+            return CMD_NUMA_BIND_TO_CPU_1
         
-        if (threads_num <= 120):
-		return CMD_NUMA_PREFIX_120
+        return CMD_NUMA_BIND_TO_CPU_0_1
+    
+        print('cmd_numa_prefix: th_num = %d' % (threads_num))
+    
+    if (threads_num <= 15):
+        return CMD_NUMA_PREFIX_15
+    
+    if (threads_num <= 30):
+        return CMD_NUMA_PREFIX_30
 
-	print 'cmd_numa_prefix: ERROR th_num = %d' % (threads_num,)
+    if (threads_num <= 45):
+        return CMD_NUMA_PREFIX_45
+
+    if (threads_num <= 60):
+        return CMD_NUMA_PREFIX_60
+
+    if (threads_num <= 75):
+        return CMD_NUMA_PREFIX_75
+    
+    if (threads_num <= 90):
+        return CMD_NUMA_PREFIX_90
+
+    if (threads_num <= 105):
+        return CMD_NUMA_PREFIX_105
+        
+    if (threads_num <= 120):
+        return CMD_NUMA_PREFIX_120
+
+    print('cmd_numa_prefix: ERROR th_num = %d' % (threads_num,))
 
 
 def extract_data(output_data, key_str):
-	data = output_data.split(key_str)[1].split()[0].strip()
-	
-	if (data.find('nan') != -1):
-		return 0
-	
-	if (key_str == 'L1-dcache-load-misses     #') or (key_str == 'branch-misses             #'):
-		data = data.strip('%')
-			
-	return float(data)
+    data = output_data.split(key_str)[1].split()[0].strip()
+    
+    if (data.find('nan') != -1):
+        return 0
+    
+    if (key_str == 'L1-dcache-load-misses     #') or (key_str == 'branch-misses             #'):
+        data = data.strip('%')
+            
+    return float(data)
 
-	
+    
 def extract_keys(output_data):
-	d = {}
-	
-	for key in result_keys:
-		d[key] = extract_data(output_data, key)
-	
-	if IS_PERF:
-		for key in perf_result_keys:
-			d[key] = extract_data(output_data, key)
-			
-	return d
+    d = {}
+    
+    for key in result_keys:
+        d[key] = extract_data(output_data, key)
+    
+    if IS_PERF:
+        for key in perf_result_keys:
+            d[key] = extract_data(output_data, key)
+            
+    return d
 
 
 def print_keys(dict_keys):
-	print '================================='
-	for key in result_keys:
-		print '%s %.2f' % (key, dict_keys[key])
-	
-	if IS_PERF:
-		for key in perf_result_keys:
-			print '%s %.2f' % (key, dict_keys[key])
-	
+    print('=================================')
+    for key in result_keys:
+        print('%s %.2f' % (key, dict_keys[key]))
+    
+    if IS_PERF:
+        for key in perf_result_keys:
+            print('%s %.2f' % (key, dict_keys[key]))
+    
 
 def run_test(runs_per_test, alg_type, cmd):
   
-	ops_total = 0
-	total_operations = 0
-	aborts_total = 0
-	total_combiners = 0
-	total_num_of_waiting = 0
-	total_additional_readers = 0
-	total_additional_writers = 0
+    ops_total = 0
+    total_operations = 0
+    aborts_total = 0
+    total_combiners = 0
+    total_num_of_waiting = 0
+    total_additional_readers = 0
+    total_additional_writers = 0
 
-	cmd_prefix = 'timeout 300 bash -c "'
-	if (IS_PERF):
-		cmd_prefix += CMD_PREFIX_PERF + ' '
-	
-	full_cmd = cmd_prefix + cmd + ' && echo $? > done"'
-	
-	print full_cmd
-	
-	total_dict_keys = {}
-	for key in result_keys:
-		total_dict_keys[key] = 0
-	
+    cmd_prefix = 'timeout 300 bash -c "'
+    if (IS_PERF):
+        cmd_prefix += CMD_PREFIX_PERF + ' '
+    
+    full_cmd = cmd_prefix + cmd + ' && echo $? > done"'
+    
+    print(full_cmd)
+    
+    total_dict_keys = {}
+    for key in result_keys:
+        total_dict_keys[key] = 0
+    
         i = 0
-	while True:
-		print 'run %d ' % (i,)
-		
-		
-		if (IS_PERF):
-			try:
-				os.unlink(PERF_FILE)
-			except OSError:
-				pass
-		
+    while True:
+        print('run %d ' % (i,))
+        
+        
+        if (IS_PERF):
+            try:
+                os.unlink(PERF_FILE)
+            except OSError:
+                pass
+        
                 os.system("rm -rf done")
-		os.system('w >> %s' % (W_OUTPUT_FILENAME,))
-		time.sleep(1)
-                os.system(full_cmd + '>' +  OUTPUT_FILENAME)
-		os.system('w >> %s' % (W_OUTPUT_FILENAME,))
+        os.system('w >> %s' % (W_OUTPUT_FILENAME,))
+        time.sleep(1)
+        os.system(full_cmd + '>' +  OUTPUT_FILENAME)
+        os.system('w >> %s' % (W_OUTPUT_FILENAME,))
 
-                if os.path.exists("./done") == False:
-                    continue
-                done = open("done", 'rb')
-                rv = done.read()
-                print rv
-                if rv == '-11':
-                    done.close()
-                    os.system("rm -rf done")
-                    time.sleep(5)
-                    continue
-                done.close()
-                os.system("rm -rf done")
+        if os.path.exists("./done") == False:
+            continue
+        done = open("done", 'rb')
+        rv = done.read()
+        print(rv)
+        if rv == '-11':
+            done.close()
+            os.system("rm -rf done")
+            time.sleep(5)
+            continue
+        done.close()
+        os.system("rm -rf done")
 
 
-		time.sleep(1)
-		f = open(OUTPUT_FILENAME, 'rb')
-		output_data = f.read()
-		f.close()
-	        os.unlink(OUTPUT_FILENAME)
+        time.sleep(1)
+        f = open(OUTPUT_FILENAME, 'rb')
+        output_data = f.read()
+        f.close()
+        os.unlink(OUTPUT_FILENAME)
 
-		if (IS_PERF):
-			f = open(PERF_FILE, 'rb');
-			output_data += f.read()
-			f.close()
-			os.unlink(PERF_FILE)
-		
-		print "------------------------------------"
-		print output_data
-		print "------------------------------------"
-				
-		dict_keys = extract_keys(output_data)
+        if (IS_PERF):
+            f = open(PERF_FILE, 'rb')
+            output_data += f.read()
+            f.close()
+            os.unlink(PERF_FILE)
+        
+        print("------------------------------------")
+        print(output_data)
+        print("------------------------------------")
+                
+        dict_keys = extract_keys(output_data)
 
-		print '================================='
-		for key in dict_keys.keys():
-			total_dict_keys[key] += dict_keys[key]
-			
-		print_keys(dict_keys)
-                i = i + 1
-                if i == runs_per_test:
-                    break
+        print('=================================')
+        for key in list(dict_keys.keys()):
+            total_dict_keys[key] += dict_keys[key]
+            
+        print_keys(dict_keys)
+        i = i + 1
+        if i == runs_per_test:
+            break
 
-	for key in total_dict_keys.keys():
-		total_dict_keys[key] /= runs_per_test
- 	
-	return total_dict_keys
+    for key in list(total_dict_keys.keys()):
+        total_dict_keys[key] /= runs_per_test
+    
+    return total_dict_keys
 
 def print_run_results(f_out,  update_ratio, th_num, dict_keys):
-	
-	f_out.write('\n %.2f %.2f' % ( update_ratio, th_num));
-	
-	for key in result_keys:
-		f_out.write(' %.2f' % dict_keys[key])
-	
-	if IS_PERF:
-		for key in perf_result_keys:
-			f_out.write(' %.2f' % dict_keys[key])
-	
-	f_out.flush()
+    
+    f_out.write('\n %.2f %.2f' % ( update_ratio, th_num));
+    
+    for key in result_keys:
+        f_out.write(' %.2f' % dict_keys[key])
+    
+    if IS_PERF:
+        for key in perf_result_keys:
+            f_out.write(' %.2f' % dict_keys[key])
+    
+    f_out.flush()
 
-	
+    
 def execute(runs_per_test, 
-			duration, 
-			alg_type, 
-			update_ratio, 
-			initial_size, 
-			range_size, 
-			output_filename, 
-			zipf_dist_val,
-			th_num_list):
+            duration, 
+            alg_type, 
+            update_ratio, 
+            initial_size, 
+            range_size, 
+            output_filename, 
+            zipf_dist_val,
+            th_num_list):
   
-	
-	f_w = open(W_OUTPUT_FILENAME, 'wb');
-	f_w.close()
+    
+    f_w = open(W_OUTPUT_FILENAME, 'wb');
+    f_w.close()
 
-	f_out = open(output_filename, 'wb')
-        if(alg_type == 'swisstm'):
-            result_keys.append("Abort:")
-        else:
-            result_keys.append("abort_ratio:")
+    f_out = open(output_filename, 'wb')
+    if(alg_type == 'swisstm'):
+        result_keys.append("Abort:")
+    else:
+        result_keys.append("abort_ratio:")
 
-	
-	cmd_header = '[%s] ' % (alg_type,) + CMD_BASE[alg_type] + ' ' + CMD_PARAMS % (
-		duration,
-		update_ratio, 
-		initial_size,
-		range_size,	
-		zipf_dist_val,
-		0)
-		
-	f_out.write(cmd_header + '\n')
-	f_out.flush()
-	
-	results = []
-	for th_num in th_num_list:
-		
-		
-		cmd = CMD_BASE[alg_type] + ' ' + CMD_PARAMS % (
-			duration,
-			update_ratio, 
-			initial_size,
-			range_size,	
-			zipf_dist_val,
-			th_num)
-		
-			
-		print '-------------------------------'
-		print '[%d] %s ' % (th_num, cmd)
-                if(IS_NUMA):
-                    cmd = cmd_numa_prefix(th_num) + cmd
+    
+    cmd_header = '[%s] ' % (alg_type,) + CMD_BASE[alg_type] + ' ' + CMD_PARAMS % (
+        duration,
+        update_ratio, 
+        initial_size,
+        range_size, 
+        zipf_dist_val,
+        0)
+        
+    f_out.write(cmd_header + '\n')
+    f_out.flush()
+    
+    results = []
+    for th_num in th_num_list:
+        
+        
+        cmd = CMD_BASE[alg_type] + ' ' + CMD_PARAMS % (
+            duration,
+            update_ratio, 
+            initial_size,
+            range_size, 
+            zipf_dist_val,
+            th_num)
+        
+            
+        print('-------------------------------')
+        print('[%d] %s ' % (th_num, cmd))
+        if(IS_NUMA):
+            cmd = cmd_numa_prefix(th_num) + cmd
 
-		dict_keys = run_test(runs_per_test, alg_type, cmd)
+        dict_keys = run_test(runs_per_test, alg_type, cmd)
 
-		results.append(dict_keys)
+        results.append(dict_keys)
 
-		print_run_results(f_out, update_ratio, th_num, dict_keys)
+        print_run_results(f_out, update_ratio, th_num, dict_keys)
 
-	
-	f_out.write('\n\n')
-	f_out.flush()
-	f_out.close()
-        del result_keys[-1]
-	
-	
-	print 'DONE: written output to %s' % (output_filename,)
+    
+    f_out.write('\n\n')
+    f_out.flush()
+    f_out.close()
+    del result_keys[-1]
+    
+    
+    print('DONE: written output to %s' % (output_filename,))
 
 
 if '__main__' == __name__:
@@ -379,7 +379,7 @@ if '__main__' == __name__:
     for opt in vars(opts):
         val = getattr(opts, opt)
         if val == None:
-            print("Missing options: %s" %opt)
+            print(("Missing options: %s" %opt))
             parser.print_help()
             exit(1)
         if len(opts.th_num_list) == 0:
@@ -404,7 +404,7 @@ if '__main__' == __name__:
         #copy plot scripts to the folder
         if llist == True:
             cmd = 'cp %s/* %s' %(LLIST_SCRIPT, result_dir)
-            print cmd
+            print(cmd)
             status = subprocess.check_output(cmd, shell=True)
         else:
             cmd = 'cp %s/* %s' %(HLIST_SCRIPT, result_dir)
@@ -416,6 +416,6 @@ if '__main__' == __name__:
             output_filename, opts.zipf_dist_val, opts.th_num_list)
     if opts.generate_graph == 1:
         cmd= 'cd %s && sh extr_txs_tree.sh && cd -'%result_dir
-        print cmd
+        print(cmd)
         status = subprocess.check_output(cmd, shell=True)
 

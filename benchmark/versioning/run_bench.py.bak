@@ -1,5 +1,4 @@
 import json
-import sys
 from run_tests import execute
 import optparse
 import os
@@ -36,7 +35,7 @@ def parseresults(log_file, plot_data, t, duration, ops_file, abort_file):
         ops_file.write(str(thd) + "    " + str(float(tot_ops)/1000) + "\n")
         abort_file.write(str(thd) + "    " + str(plot_data[t]['abrt_ratio'][-1]) + "\n")
         #print thd
-        print(tot_ops)
+        print tot_ops
         
 def plotgraph(plot_data, threads, update_rate, data_structure, initial_size, graph_type, final_dir):
     fig = plt.figure()
@@ -80,9 +79,9 @@ with open(opts.config) as json_data_file:
 for test in data:
     if data[test][0]["data_structure"] == "llist":
         if data[test][0]["buckets"] != 1:
-            sys.exit("Buckets should be 1\n")
+            sys.exit("Buckets should be 1\n");
     for ur in data[test][0]["update_rate"]:
-        final_dir = result_dir + test + "/u" + str(ur) + "/"
+        final_dir = result_dir + test + "/u" + str(ur) + "/";
 
         try:
             os.stat(final_dir)

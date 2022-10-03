@@ -3,6 +3,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2018-2019 Virginia Tech
 # SPDX-License-Identifier: Apache-2.0
 
+import sys
 import json
 from run_tests_stats import execute
 import optparse
@@ -104,9 +105,9 @@ with open('config.json') as json_data_file:
 for test in data:
     if data[test][0]["data_structure"] == "llist":
         if data[test][0]["buckets"] != 1:
-            sys.exit("Buckets should be 1\n");
+            sys.exit("Buckets should be 1\n")
     for ur in data[test][0]["update_rate"]:
-        final_dir = result_dir + test + "/u" + str(ur) + "/";
+        final_dir = result_dir + test + "/u" + str(ur) + "/"
 
         try:
             os.stat(final_dir)
