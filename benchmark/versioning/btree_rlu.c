@@ -465,7 +465,7 @@ int list_find(int key, pthread_data_t *data)
 	int ret, val;
 
 	RLU_READER_LOCK(rlu_data);
-    node_t *node = btree->root->children[0];
+    node_t *node = (node_t *)RLU_DEREF(rlu_data, (btree->root->children[0]));
     for (int depth = 0;;depth++) {
         int found = 0;
         size_t i = node_find(node, key, &found);
@@ -477,7 +477,7 @@ int list_find(int key, pthread_data_t *data)
 	        RLU_READER_UNLOCK(rlu_data);
             return 0;
         }
-        node = node->children[i];
+        node = (node_t *) RLU_DEREF(rlu_data, (node->children[i]));
     }
 
 	RLU_READER_UNLOCK(rlu_data);
