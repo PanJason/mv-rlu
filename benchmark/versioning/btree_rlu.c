@@ -78,7 +78,7 @@ void free_pthread_data(pthread_data_t *d)
 	free(d);
 }
 
-static size_t node_find(rlu_btree_t *btree, node_t *node, int key, int *found) 
+static size_t node_find(node_t *node, int key, int *found) 
 {
     size_t low = 0;
     size_t high = node->num_items-1;
@@ -133,7 +133,7 @@ static void node_split_init(rlu_btree_t *btree, node_t *node, node_t **right, in
 static int node_set_init(rlu_btree_t *btree, node_t *node, int key, int depth) 
 {
     int found = 0;
-    size_t i = node_find(btree, node, key, &found);
+    size_t i = node_find(node, key, &found);
     if (found) {
         return 1;
     }
@@ -160,19 +160,19 @@ int list_ins_init(rlu_btree_t *btree, int key)
 {
 	node_t *prev, *cur, *new_node;
 	int direction, ret, val;
-    if (node_set_init(btree, btree->root, key, 0)) {
+    if (node_set_init(btree, btree->root->children[0], key, 0)) {
         return 0;
     }
-    if ((size_t)btree->root->num_items == (btree->max_items-1)) {
-        node_t *old_root = btree->root;
+    if ((size_t)btree->root->children[0]->num_items == (btree->max_items-1)) {
+        node_t *old_root = btree->root->children[0];
         node_t *right = NULL;
         int median = 0;
         node_split_init(btree, old_root, &right, &median);
-        btree->root = rlu_new_node(btree, 0);
-        btree->root->children[0] = old_root;
-        btree->root->items[0] = median;
-        btree->root->children[1] = right;
-        btree->root->num_items = 1;
+        btree->root->children[0] = rlu_new_node(btree, 0);
+        btree->root->children[0] -> children[0] = old_root;
+        btree->root->children[0] -> items[0] = median;
+        btree->root->children[0] -> children[1] = right;
+        btree->root->children[0] -> num_items = 1;
     }
 
 	return 1;
@@ -190,14 +190,16 @@ void *list_global_init(int init_size, int value_range)
 		return NULL;
     btree->max_items = MAX_ITEMS;
     btree->min_items = MAX_ITEMS >> 1;
+    btree->root = rlu_new_node(btree, 0);
+    btree->root->num_items = 0;
 
 	i = 0;
 	while (i < init_size) {
 		key = rand() % value_range;
-        if (!btree->root){
-            btree->root = rlu_new_node(btree, 1);
-            btree->root ->num_items = 1;
-            btree->root ->items[0] = key;
+        if (!btree->root->children[0]){
+            btree->root->children[0] = rlu_new_node(btree, 1);
+            btree->root->children[0]->num_items = 1;
+            btree->root->children[0]->items[0] = key;
         }
         else{
             list_ins_init(btree, key);
@@ -271,7 +273,7 @@ static void node_split(rlu_btree_t *btree, node_t *node, node_t **right, int *me
 static int node_set(rlu_btree_t *btree, node_t *node, int key, int depth) 
 {
     int found = 0;
-    size_t i = node_find(btree, node, key, &found);
+    size_t i = node_find(node, key, &found);
     if (found) {
         return 1;
     }
@@ -305,19 +307,19 @@ int list_ins(int key, pthread_data_t *data)
 restart:
 	RLU_READER_LOCK(rlu_data);
 
-    if (node_set(btree, btree->root, key, 0)) {
+    if (node_set(btree, btree->root->children[0], key, 0)) {
         return 0;
     }
-    if ((size_t)btree->root->num_items == (btree->max_items-1)) {
-        node_t *old_root = btree->root;
+    if ((size_t)btree->root->children[0]->num_items == (btree->max_items-1)) {
+        node_t *old_root = btree->root->children[0];
         node_t *right = NULL;
         int median = 0;
         node_split(btree, old_root, &right, &median);
-        btree->root = rlu_new_node(btree, 0);
-        btree->root->children[0] = old_root;
-        btree->root->items[0] = median;
-        btree->root->children[1] = right;
-        btree->root->num_items = 1;
+        btree->root->children[0] = rlu_new_node(btree, 0);
+        btree->root->children[0]->children[0] = old_root;
+        btree->root->children[0]->items[0] = median;
+        btree->root->children[0]->children[1] = right;
+        btree->root->children[0]->num_items = 1;
     }
 
 	RLU_READER_UNLOCK(rlu_data);
@@ -340,7 +342,7 @@ static int node_delete(rlu_btree_t *btree, node_t *node, enum delact act,
         found = 1;
         break;
     case DELKEY:
-        i = node_find(btree, node, key, &found);
+        i = node_find(node, key, &found);
         break;
     }
     if (node->leaf) {
@@ -439,16 +441,16 @@ int list_del(int key, pthread_data_t *data)
 restart:
 	RLU_READER_LOCK(rlu_data);
     int tmp;
-    int deleted = node_delete(btree, btree->root, DELKEY, 0 , key, &tmp, 0, rlu_data);
+    int deleted = node_delete(btree, btree->root->children[0], DELKEY, 0 , key, &tmp, 0, rlu_data);
     if (!deleted) {
         return 0;
     }
-    if (btree->root->num_items == 0) {
-        struct node *old_root = btree->root;
-        if (!btree->root->leaf) {
-            btree->root = btree->root->children[0];
+    if (btree->root->children[0]->num_items == 0) {
+        struct node *old_root = btree->root->children[0];
+        if (!btree->root->children[0]->leaf) {
+            btree->root->children[0] = btree->root->children[0]->children[0];
         } else {
-            btree->root = NULL;
+            btree->root->children[0] = NULL;
         }
         RLU_FREE(rlu_data, old_root);
     }
@@ -463,10 +465,10 @@ int list_find(int key, pthread_data_t *data)
 	int ret, val;
 
 	RLU_READER_LOCK(rlu_data);
-    node_t *node = btree->root;
+    node_t *node = btree->root->children[0];
     for (int depth = 0;;depth++) {
         int found = 0;
-        size_t i = node_find(btree, node, key, &found);
+        size_t i = node_find(node, key, &found);
         if (found) {
 	        RLU_READER_UNLOCK(rlu_data);
             return 1;
