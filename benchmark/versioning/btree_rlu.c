@@ -254,7 +254,7 @@ static void node_shift_left(node_t *node, size_t index, int for_merge)
     node->num_items--;
 }
 
-static void node_split(rlu_btree_t *btree, node_t *node, node_t **right, int *median) 
+static void node_split(rlu_btree_t *btree, node_t *node, node_t **right, int *median, rlu_thread_data_t *rlu_data) 
 {
     size_t mid = (int)(btree->max_items-1)/2;
     *median = node->items[mid];    
@@ -264,34 +264,65 @@ static void node_split(rlu_btree_t *btree, node_t *node, node_t **right, int *me
             (size_t)(*right)->num_items*sizeof(int));
     if (!node->leaf) {
         for (int i = 0; i <= (*right)->num_items; i++) {
-            (*right)->children[i] = node->children[mid+1+i];
+            RLU_ASSIGN_PTR(rlu_data, &((*right)->children[i]), node->children[mid + 1 + i]);
         }
     }
     node->num_items = mid;
 }
-
-static int node_set(rlu_btree_t *btree, node_t *node, int key, int depth) 
+/*with_lock = 1 represent node_set holds the lock for this level. Otherwise only deref.*/
+static int node_set(rlu_btree_t *btree, node_t *node, int key, int depth, int *with_lock, pthread_data_t *data) 
 {
     int found = 0;
+	rlu_thread_data_t *rlu_data = (rlu_thread_data_t *)data->ds_data;
     size_t i = node_find(node, key, &found);
     if (found) {
+        *with_lock = 0;
         return 1;
     }
     if (node->leaf) {
+        if(!RLU_TRY_LOCK(rlu_data, &node)){
+            data->nr_abort++;
+            return -1;
+        }
         node_shift_right(node, i);
         node->items[i] = key;
+        *with_lock = 1;
         return 0;
     }
-    if (node_set(btree, node->children[i], key, depth+1)) {
+    
+    node_t *child = (node_t *)RLU_DEREF(rlu_data, (node->children[i]));
+    int with_lock_child;
+    int ret = node_set(btree, child, key, depth+1, &with_lock_child, data);
+    if (ret == 1) {
+        *with_lock = 0;
         return 1;
     }
-    if ((size_t)node->children[i]->num_items == (btree->max_items-1)) {
+    else if (ret == -1)
+    {
+        return -1;
+    }
+    
+    if ((size_t)child->num_items == (btree->max_items-1)) {
         int median = 0;
         node_t *right = NULL;
-        node_split(btree, node->children[i], &right, &median);
+        if (with_lock_child == 0){
+            if (!RLU_TRY_LOCK(rlu_data, &child) || !RLU_TRY_LOCK(rlu_data, &node)){
+                data->nr_abort++;
+                return -1;
+            }
+        }
+        else if (with_lock_child == 1)
+        {
+            if (!RLU_TRY_LOCK(rlu_data, &node)){
+                data->nr_abort++;
+                return -1;
+            }
+        }
+        node_split(btree, child, &right, &median, rlu_data);
         node_shift_right(node, i);
         node->items[i] = median;
-        node->children[i+1] = right;
+        RLU_ASSIGN_PTR(rlu_data, &(node->children[i+1]), right);
+        *with_lock = 1;
     }
     return 0;
 }
@@ -302,24 +333,49 @@ int list_ins(int key, pthread_data_t *data)
 	rlu_btree_t *btree = (rlu_btree_t *)data->list;
 	rlu_thread_data_t *rlu_data = (rlu_thread_data_t *)data->ds_data;
 	node_t *prev, *cur, *new_node;
-	int direction, ret, val;
+	int with_lock, ret;
 
 restart:
 	RLU_READER_LOCK(rlu_data);
-
-    if (node_set(btree, btree->root->children[0], key, 0)) {
+    prev = (node_t *)RLU_DEREF(rlu_data, (btree->root));
+    cur = (node_t *)RLU_DEREF(rlu_data, (prev->children[0]));
+    ret = node_set(btree, cur, key, 0, &with_lock, data);
+    if (ret == 1) {
+        RLU_READER_UNLOCK(rlu_data);
         return 0;
     }
-    if ((size_t)btree->root->children[0]->num_items == (btree->max_items-1)) {
-        node_t *old_root = btree->root->children[0];
+    else if (ret == -1)
+    {
+        RLU_ABORT(rlu_data);
+        goto restart;
+    }
+    
+    if ((size_t)cur->num_items == (btree->max_items-1)) {
+        node_t *old_root = cur;
         node_t *right = NULL;
         int median = 0;
-        node_split(btree, old_root, &right, &median);
-        btree->root->children[0] = rlu_new_node(btree, 0);
-        btree->root->children[0]->children[0] = old_root;
-        btree->root->children[0]->items[0] = median;
-        btree->root->children[0]->children[1] = right;
-        btree->root->children[0]->num_items = 1;
+        if (with_lock == 0){
+            if (!RLU_TRY_LOCK(rlu_data, &cur) || !RLU_TRY_LOCK(rlu_data, &prev)){
+                data->nr_abort++;
+                RLU_ABORT(rlu_data);
+                goto restart;
+            }
+        }
+        else if (with_lock == 1)
+        {
+            if (!RLU_TRY_LOCK(rlu_data, &prev)){
+                data->nr_abort++;
+                RLU_ABORT(rlu_data);
+                goto restart;
+            }
+        }
+        node_split(btree, old_root, &right, &median, rlu_data);
+        new_node = rlu_new_node(btree, 0);
+        new_node->children[0] = old_root;
+        new_node->items[0] = median;
+        new_node->children[1] = right;
+        new_node->num_items = 1;
+        RLU_ASSIGN_PTR(rlu_data, &(prev->children[0]), new_node);
     }
 
 	RLU_READER_UNLOCK(rlu_data);
