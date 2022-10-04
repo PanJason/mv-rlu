@@ -6,6 +6,7 @@
 #endif
 
 #include <stdio.h>
+#include <string.h>
 
 #define TEST_RLU_MAX_WS 1
 #define MAX_ITEMS 128
@@ -158,8 +159,6 @@ static int node_set_init(rlu_btree_t *btree, node_t *node, int key, int depth)
 
 int list_ins_init(rlu_btree_t *btree, int key)
 {
-	node_t *prev, *cur, *new_node;
-	int direction, ret, val;
     if (node_set_init(btree, btree->root->children[0], key, 0)) {
         return 0;
     }
@@ -182,8 +181,7 @@ int list_ins_init(rlu_btree_t *btree, int key)
 void *list_global_init(int init_size, int value_range)
 {
 	rlu_btree_t *btree;
-	node_t *prev, *cur, *new_node;
-	int i, key, val, direction;
+	int i, key;
 
 	btree = (rlu_btree_t *)malloc(sizeof(rlu_btree_t));
 	if (btree == NULL)
@@ -426,7 +424,7 @@ static int node_delete(rlu_btree_t *btree, node_t **node, enum delact act,
             // popping off the max item into into its parent branch to maintain
             // a balanced tree.
             i++;
-            ret = node_delete(btree, &child, POPMAX, 0, NULL, prev, depth+1, &with_lock_child, data);
+            ret = node_delete(btree, &child, POPMAX, 0, 0, prev, depth+1, &with_lock_child, data);
             if (ret == -1) return -1;
             deleted = 1;
         } else {
@@ -434,7 +432,7 @@ static int node_delete(rlu_btree_t *btree, node_t **node, enum delact act,
             // begin popping off the max items in child nodes. 
             *prev = (*node)->items[i];
             int tmp;
-            ret = node_delete(btree, &child, POPMAX, 0, NULL, &tmp, depth+1, &with_lock_child, data);
+            ret = node_delete(btree, &child, POPMAX, 0, 0, &tmp, depth+1, &with_lock_child, data);
             if (ret == -1) return -1;
             if (!RLU_TRY_LOCK(rlu_data, node)){
                 data->nr_abort++;
@@ -510,7 +508,9 @@ static int node_delete(rlu_btree_t *btree, node_t **node, enum delact act,
         left->num_items++;
         memcpy(left->items+sizeof(int) * left->num_items, right->items, right->num_items*sizeof(int));
         if (!left->leaf) {
-            memcpy(&left->children[left->num_items], &right->children[0], (right->num_items+1)*sizeof(node_t *));
+            for(size_t k=0; k < right->num_items + 1; k++){
+                RLU_ASSIGN_PTR(rlu_data, &(left->children[left->num_items + k]), right->children[k]);
+            }
         }
         left->num_items += right->num_items;
         RLU_FREE(rlu_data, right);
@@ -521,13 +521,13 @@ static int node_delete(rlu_btree_t *btree, node_t **node, enum delact act,
             }
             *with_lock = 1;
         }
-        node_shift_left(node, i, 1);
+        node_shift_left((*node), i, 1);
     } else if (left->num_items > right->num_items) {
         // move left -> right
         node_shift_right(right, 0);
         right->items[0] = (*node)->items[i];
         if (!left->leaf) {
-            right->children[0] = left->children[left->num_items];
+            RLU_ASSIGN_PTR(rlu_data, &(right->children[0]), (left->children[left->num_items]));
         }
         if ((*with_lock) == 0){
             if (!RLU_TRY_LOCK(rlu_data, node)){
@@ -545,7 +545,7 @@ static int node_delete(rlu_btree_t *btree, node_t **node, enum delact act,
         // move right -> left
         left->items[left->num_items] = (*node)->items[i];
         if (!left->leaf) {
-            left->children[left->num_items+1] = right->children[0];
+            RLU_ASSIGN_PTR(rlu_data, &(left->children[left->num_items+1]), (right->children[0]));
         }
         left->num_items++;
         if ((*with_lock) == 0){
@@ -602,7 +602,6 @@ int list_find(int key, pthread_data_t *data)
 {
 	rlu_btree_t *btree = (rlu_btree_t *)data->list;
 	rlu_thread_data_t *rlu_data = (rlu_thread_data_t *)data->ds_data;
-	int ret, val;
 
 	RLU_READER_LOCK(rlu_data);
     node_t *node = (node_t *)RLU_DEREF(rlu_data, (btree->root->children[0]));
