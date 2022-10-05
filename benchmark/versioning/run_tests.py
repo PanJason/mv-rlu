@@ -26,6 +26,8 @@ CMD_BASE_VLIST_LIST = './benchmark_list_vlist'
 CMD_BASE_VRBTREE = './benchmark_tree_vrbtree'
 CMD_BASE_RLU_ORDO = './benchmark_tree_rlu_ordo'
 CMD_BASE_MVRLU = './benchmark_tree_mvrlu'
+CMD_BASE_MVRLU_BTREE = './benchmark_btree_mvrlu'
+CMD_BASE_MVRLU_ORDO_BTREE = './benchmark_btree_mvrlu_ordo'
 CMD_BASE_MVRLU_ORDO = './benchmark_tree_mvrlu_ordo'
 CMD_BASE_MVRLU_ORDO_LIST = './benchmark_list_mvrlu_ordo'
 CMD_BASE_CITRUS_MVRLU_ORDO = './benchmark_tree_citrus_mvrlu_ordo'
@@ -76,6 +78,8 @@ CMD_BASE = {
         'rlu_ordo' : CMD_BASE_RLU_ORDO,
     'mvrlu' : CMD_BASE_MVRLU,
         'mvrlu_ordo' : CMD_BASE_MVRLU_ORDO,
+        'mvrlu_btree' : CMD_BASE_MVRLU_BTREE,
+        'mvrlu_ordo_btree' : CMD_BASE_MVRLU_ORDO_BTREE,
         'mvrlu_ordo_list' : CMD_BASE_MVRLU_ORDO_LIST,
         'citrus_mvrlu_ordo' : CMD_BASE_CITRUS_MVRLU_ORDO,
         'swisstm' : CMD_BASE_SWISSTM,
@@ -108,7 +112,7 @@ perf_result_keys = [
 
 def cmd_numa_prefix(threads_num):
     if (IS_2_SOCKET):
-        if (threads_num <= 27):
+        if (threads_num <= 56):
             print('cmd_numa_prefix: BIND_CPU th_num = %d' % (threads_num,))
             return CMD_NUMA_BIND_TO_CPU_1
         
@@ -219,7 +223,7 @@ def run_test(runs_per_test, alg_type, cmd):
 
         if os.path.exists("./done") == False:
             continue
-        done = open("done", 'rb')
+        done = open("done", 'r')
         rv = done.read()
         print(rv)
         if rv == '-11':
@@ -232,7 +236,7 @@ def run_test(runs_per_test, alg_type, cmd):
 
 
         time.sleep(1)
-        f = open(OUTPUT_FILENAME, 'rb')
+        f = open(OUTPUT_FILENAME, 'r')
         output_data = f.read()
         f.close()
         os.unlink(OUTPUT_FILENAME)
@@ -265,7 +269,7 @@ def run_test(runs_per_test, alg_type, cmd):
 
 def print_run_results(f_out,  update_ratio, th_num, dict_keys):
     
-    f_out.write('\n %.2f %.2f' % ( update_ratio, th_num));
+    f_out.write('\n %.2f %.2f' % ( update_ratio, th_num))
     
     for key in result_keys:
         f_out.write(' %.2f' % dict_keys[key])
@@ -288,10 +292,10 @@ def execute(runs_per_test,
             th_num_list):
   
     
-    f_w = open(W_OUTPUT_FILENAME, 'wb');
+    f_w = open(W_OUTPUT_FILENAME, 'w')
     f_w.close()
 
-    f_out = open(output_filename, 'wb')
+    f_out = open(output_filename, 'w')
     if(alg_type == 'swisstm'):
         result_keys.append("Abort:")
     else:

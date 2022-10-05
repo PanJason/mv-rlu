@@ -1,0 +1,17 @@
+{
+        "btree1k": [
+                {
+                        "data_structure": "btree",
+                        "runs_per_test": 1,
+                        "rlu_max_ws" : 1,
+                        "buckets" : 1,
+                        "duration" : 20000,
+                        "alg_type" : ["mvrlu_ordo_btree"],
+                        "update_rate" : [0],
+                        "initial_size" : 1000,
+                        "range_size" : 2000,
+                        "zipf_dist_val" : 0,
+                        "threads" : [1]
+                }
+        ]
+}

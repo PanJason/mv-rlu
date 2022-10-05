@@ -15,7 +15,7 @@ CFLAGS += -I$(INC_DIR)
 LDFLAGS += -lpthread $(MEMMGR)
 LDFLAGS += -lm
 
-.PHONY: all clean
+.PHONY: all clean btree
 
 BINS = benchmark_list_spinlock      \
        benchmark_list_rcu           \
@@ -42,13 +42,25 @@ BINS = benchmark_list_spinlock      \
        benchmark_tree_vtree         \
        benchmark_tree_bonsai        \
        benchmark_tree_vrbtree       \
-       benchmark_tree_swisstm
+       benchmark_tree_swisstm       \
+       benchmark_btree_mvrlu	    \
+       benchmark_btree_mvrlu_ordo
+
+BTREE_BINS :=  benchmark_btree_mvrlu	    \
+       	       benchmark_btree_mvrlu_ordo
 
 all: $(BINS)
 	@for d in $(BINS); \
                 do ( cp $$d $(BIN_DIR); \
                 ); \
         done
+
+btree: $(BTREE_BINS)
+	@for d in $(BTREE_BINS); \
+                do ( cp $$d $(BIN_DIR); \
+                ); \
+        done
+
 
 numa-config.h:
 	$(TOOLS_DIR)/cpu-topology.py > $(CUR_DIR)/numa-config.h
@@ -175,6 +187,9 @@ tree_citrus_mvrlu.o: tree_citrus_rlu.c benchmark_list.h
 tree_vtree.o: tree_vtree.c benchmark_list.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
+btree_mvrlu.o: btree_rlu.c benchmark_list.h
+	$(CC) $(CFLAGS) -DMVRLU -c -o $@ $<
+
 benchmark_tree_prcu_eer: rand.o zipf.o benchmark_list.o tree_prcu_eer.o
 	$(LD) -o $@ $^ $(LDFLAGS)
 
@@ -225,6 +240,14 @@ benchmark_tree_vrbtree: rand.o zipf.o benchmark_list.o tree_vrbtree.o qsbr.o
 benchmark_tree_swisstm: benchmark_list_swisstm
 	cd swisstm && $(MAKE) target/obj/intset-tree
 	cp swisstm/target/obj/intset-tree $@
+
+# BTree
+
+benchmark_btree_mvrlu: rand.o zipf.o benchmark_list.o btree_mvrlu.o $(LIB_DIR)/libmvrlu-gclk.a
+	$(LD) -o $@ $^ $(LDFLAGS)
+
+benchmark_btree_mvrlu_ordo: rand.o zipf.o benchmark_list.o btree_mvrlu.o $(LIB_DIR)/libmvrlu-ordo.a
+	$(LD) -o $@ $^ $(LDFLAGS)
 
 clean:
 	cd swisstm && $(MAKE) clean

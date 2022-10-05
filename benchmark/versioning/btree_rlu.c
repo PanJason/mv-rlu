@@ -1,19 +1,16 @@
 #include "benchmark_list.h"
-#ifdef MVRLU
 #include "mvrlu.h"
-#else
-#include "rlu.h"
-#endif
 
 #include <stdio.h>
 #include <string.h>
 
 #define TEST_RLU_MAX_WS 1
-#define MAX_ITEMS 128
+#define MAX_ITEMS 4
 
 typedef struct node {
     int leaf;
     int num_items;
+    int size;
     int* items;
 	struct node *children[];
 } node_t;
@@ -38,7 +35,8 @@ static node_t *rlu_new_node(rlu_btree_t *btree, int leaf)
     }
     node->leaf = leaf;
     node->num_items = 0;
-    node->items = (int*)node+itemsoff;
+    node->size = sz;
+    node->items = (int*)((void *)node+itemsoff);
     return node;
 }
 
@@ -70,22 +68,59 @@ pthread_data_t *alloc_pthread_data(void)
 	return d;
 }
 
+static void node_print(rlu_btree_t *btree, node_t *node, int depth, rlu_thread_data_t *rlu_data) 
+{
+    if (node->leaf) {
+        for (int i = 0; i < depth; i++) {
+            printf("  ");
+        }
+        printf("[");
+        for (int i = 0; i < node->num_items; i++) {
+            if (i > 0) {
+                printf(" ");
+            }
+            printf("%d", node->items[i]);
+        }
+        printf("]\n");
+    } else {
+        for (short i = 0; i < node->num_items; i++) {
+            node_t *child = RLU_DEREF(rlu_data, (node->children[i]));
+            node_print(btree, child, depth+1, rlu_data);
+            for (int j = 0; j < depth; j++) {
+                printf("  ");
+            }
+            printf("%d", node->items[i]);
+            printf("\n");
+        }
+        node_t *child = RLU_DEREF(rlu_data, (node->children[node->num_items]));
+        node_print(btree, child, depth+1, rlu_data);
+    }
+}
+
 void free_pthread_data(pthread_data_t *d)
 {
 	rlu_thread_data_t *rlu_data = (rlu_thread_data_t *)d->ds_data;
+	
+    rlu_btree_t *btree = (rlu_btree_t *)d->list;
+    node_t *root = RLU_DEREF(rlu_data, (btree->root->children[0]));
+    node_print(btree, root, 0, rlu_data);
 
 	RLU_THREAD_FINISH(rlu_data);
 
 	free(d);
 }
 
-static size_t node_find(node_t *node, int key, int *found) 
+static int node_find(node_t *node, int key, int *found) 
 {
-    size_t low = 0;
-    size_t high = node->num_items-1;
-    size_t index;
+    if (node->num_items == 0) {
+        *found = 0;
+        return 0;
+    }
+    int low = 0;
+    int high = node->num_items-1;
+    int index;
     while ( low <= high ) {
-        size_t mid = (low + high) / 2;
+        int mid = (low + high) / 2;
         int item = node->items[mid];
         if (key == item) {
             *found = 1;
@@ -104,24 +139,24 @@ static size_t node_find(node_t *node, int key, int *found)
 }
 
 static void node_shift_right_init(node_t *node, size_t index) {
-    memmove(node->items+sizeof(int)*(index+1), 
-            node->items+sizeof(int)*index,
+    memmove(&node->items[index+1], 
+            &node->items[index],
             ((size_t)node->num_items-index)*sizeof(int));
     if (!node->leaf) {
         memmove(&node->children[index+1],
                 &node->children[index],
-                ((size_t)node->num_items-index+1)*sizeof(struct node*));
+                ((size_t)node->num_items-index+1)*sizeof(node_t *));
     }
     node->num_items++;
 }
 
 static void node_split_init(rlu_btree_t *btree, node_t *node, node_t **right, int *median) 
 {
-    size_t mid = (int)(btree->max_items-1)/2;
+    int mid = (int)(btree->max_items-1)/2;
     *median = node->items[mid];    
-    *right = rlu_new_node(btree,node->leaf);
+    *right = rlu_new_node(btree, node->leaf);
     (*right)->num_items = node->num_items-(mid+1);
-    memmove((*right)->items, node->items+(int)sizeof(int)*(mid+1),
+    memmove((*right)->items, &node->items[mid+1],
             (size_t)(*right)->num_items*sizeof(int));
     if (!node->leaf) {
         for (int i = 0; i <= (*right)->num_items; i++) {
@@ -134,13 +169,13 @@ static void node_split_init(rlu_btree_t *btree, node_t *node, node_t **right, in
 static int node_set_init(rlu_btree_t *btree, node_t *node, int key, int depth) 
 {
     int found = 0;
-    size_t i = node_find(node, key, &found);
+    int i = node_find(node, key, &found);
     if (found) {
         return 1;
     }
     if (node->leaf) {
-        node_shift_right_init(node, i);
-        node->items[i] = key;
+        node_shift_right_init(node, (size_t)i);
+        node->items[(size_t)i] = key;
         return 0;
     }
     if (node_set_init(btree, node->children[i], key, depth+1)) {
@@ -190,14 +225,16 @@ void *list_global_init(int init_size, int value_range)
     btree->min_items = (MAX_ITEMS << 2) / 10;
     btree->root = rlu_new_node(btree, 0);
     btree->root->num_items = 0;
+    btree->root->children[0] = NULL;
 
 	i = 0;
 	while (i < init_size) {
 		key = rand() % value_range;
         if (!btree->root->children[0]){
-            btree->root->children[0] = rlu_new_node(btree, 1);
-            btree->root->children[0]->num_items = 1;
-            btree->root->children[0]->items[0] = key;
+            node_t *node = rlu_new_node(btree, 1);
+            node->num_items = 1;
+            node->items[0] = key;
+            btree->root->children[0] = node;
         }
         else{
             list_ins_init(btree, key);
@@ -225,8 +262,8 @@ void list_global_exit(void *list)
 }
 
 static void node_shift_right(node_t *node, size_t index) {
-    memmove(node->items+sizeof(int)*(index+1), 
-            node->items+sizeof(int)*index,
+    memmove(&node->items[index+1], 
+            &node->items[index],
             ((size_t)node->num_items-index)*sizeof(int));
     if (!node->leaf) {
         memmove(&node->children[index+1],
@@ -238,8 +275,8 @@ static void node_shift_right(node_t *node, size_t index) {
 
 static void node_shift_left(node_t *node, size_t index, int for_merge) 
 {
-    memmove(node->items+sizeof(int)*index, 
-            node->items+sizeof(int)*(index+1),
+    memmove(&node->items[index], 
+            &node->items[index+1],
             ((size_t)node->num_items-index)*sizeof(int));
     if (!node->leaf) {
         if (for_merge) {
@@ -254,11 +291,11 @@ static void node_shift_left(node_t *node, size_t index, int for_merge)
 
 static void node_split(rlu_btree_t *btree, node_t *node, node_t **right, int *median, rlu_thread_data_t *rlu_data) 
 {
-    size_t mid = (int)(btree->max_items-1)/2;
+    int mid = (int)(btree->max_items-1)/2;
     *median = node->items[mid];    
     *right = rlu_new_node(btree,node->leaf);
     (*right)->num_items = node->num_items-(mid+1);
-    memmove((*right)->items, node->items+(int)sizeof(int)*(mid+1),
+    memmove((*right)->items, &node->items[mid+1],
             (size_t)(*right)->num_items*sizeof(int));
     if (!node->leaf) {
         for (int i = 0; i <= (*right)->num_items; i++) {
@@ -272,17 +309,17 @@ static int node_set(rlu_btree_t *btree, node_t **node, int key, int depth, int *
 {
     int found = 0;
 	rlu_thread_data_t *rlu_data = (rlu_thread_data_t *)data->ds_data;
-    size_t i = node_find((*node), key, &found);
+    int i = node_find((*node), key, &found);
     if (found) {
         *with_lock = 0;
         return 1;
     }
     if ((*node)->leaf) {
-        if(!RLU_TRY_LOCK(rlu_data, node)){
+        if(!_mvrlu_try_lock(rlu_data, (void**)node, (*node)->size)){
             data->nr_abort++;
             return -1;
         }
-        node_shift_right((*node), i);
+        node_shift_right((*node), (size_t)i);
         (*node)->items[i] = key;
         *with_lock = 1;
         return 0;
@@ -304,20 +341,20 @@ static int node_set(rlu_btree_t *btree, node_t **node, int key, int depth, int *
         int median = 0;
         node_t *right = NULL;
         if (with_lock_child == 0){
-            if (!RLU_TRY_LOCK(rlu_data, &child) || !RLU_TRY_LOCK(rlu_data, node)){
+            if (!_mvrlu_try_lock(rlu_data, (void **)(&child), child->size) || !_mvrlu_try_lock(rlu_data, (void **)node, (*node)->size)){
                 data->nr_abort++;
                 return -1;
             }
         }
         else if (with_lock_child == 1)
         {
-            if (!RLU_TRY_LOCK(rlu_data, node)){
+            if (!_mvrlu_try_lock(rlu_data, (void **)node, (*node)->size)){
                 data->nr_abort++;
                 return -1;
             }
         }
         node_split(btree, child, &right, &median, rlu_data);
-        node_shift_right((*node), i);
+        node_shift_right((*node), (size_t)i);
         (*node)->items[i] = median;
         RLU_ASSIGN_PTR(rlu_data, &((*node)->children[i+1]), right);
         *with_lock = 1;
@@ -352,7 +389,7 @@ restart:
         node_t *right = NULL;
         int median = 0;
         if (with_lock == 0){
-            if (!RLU_TRY_LOCK(rlu_data, &cur) || !RLU_TRY_LOCK(rlu_data, &prev)){
+            if (!_mvrlu_try_lock(rlu_data, (void **)(&cur), cur->size) || !_mvrlu_try_lock(rlu_data, (void **)(&prev), prev->size)){
                 data->nr_abort++;
                 RLU_ABORT(rlu_data);
                 goto restart;
@@ -360,7 +397,7 @@ restart:
         }
         else if (with_lock == 1)
         {
-            if (!RLU_TRY_LOCK(rlu_data, &prev)){
+            if (!_mvrlu_try_lock(rlu_data, (void **)(&prev), prev->size)){
                 data->nr_abort++;
                 RLU_ABORT(rlu_data);
                 goto restart;
@@ -388,7 +425,7 @@ static int node_delete(rlu_btree_t *btree, node_t **node, enum delact act,
     size_t index, int key, int *prev, int depth, int *with_lock, pthread_data_t *data)
 {
 	rlu_thread_data_t *rlu_data = (rlu_thread_data_t *)data->ds_data;
-    size_t i = 0;
+    int i = 0;
     int found = 0;
     switch (act) {
     case POPMAX:
@@ -402,12 +439,12 @@ static int node_delete(rlu_btree_t *btree, node_t **node, enum delact act,
     if ((*node)->leaf) {
         if (found) {
             // item was found in leaf, copy its contents and delete it.
-            *prev = (*node)->items[i];
-            if (!RLU_TRY_LOCK(rlu_data, node)){
+            *prev = (*node)->items[(size_t)i];
+            if (!_mvrlu_try_lock(rlu_data, (void **)node, (*node)->size)){
                 data->nr_abort++;
                 return -1;
             }
-            node_shift_left((*node), i, 0);
+            node_shift_left((*node), (size_t)i, 0);
             *with_lock = 1;
             return 1;
         }
@@ -430,15 +467,15 @@ static int node_delete(rlu_btree_t *btree, node_t **node, enum delact act,
         } else {
             // item was found in branch, copy its contents, delete it, and 
             // begin popping off the max items in child nodes. 
-            *prev = (*node)->items[i];
+            *prev = (*node)->items[(size_t)i];
             int tmp;
             ret = node_delete(btree, &child, POPMAX, 0, 0, &tmp, depth+1, &with_lock_child, data);
             if (ret == -1) return -1;
-            if (!RLU_TRY_LOCK(rlu_data, node)){
+            if (!_mvrlu_try_lock(rlu_data, (void **)node, (*node)->size)){
                 data->nr_abort++;
                 return -1;
             }
-            (*node)->items[i] = tmp;
+            (*node)->items[(size_t)i] = tmp;
             *with_lock = 1;
             deleted = 1;
         }
@@ -467,19 +504,19 @@ static int node_delete(rlu_btree_t *btree, node_t **node, enum delact act,
     node_t *left = (node_t *)RLU_DEREF(rlu_data, ((*node)->children[i]));
     node_t *right = (node_t *)RLU_DEREF(rlu_data, ((*node)->children[i+1]));
     if (j != i && j != i+1){
-        if(!RLU_TRY_LOCK(rlu_data, &left) || !RLU_TRY_LOCK(rlu_data, &right)){
+        if(!_mvrlu_try_lock(rlu_data, (void **)(&left), left->size) || !_mvrlu_try_lock(rlu_data, (void **)(&right), right->size)){
             data->nr_abort++;
             return -1;
         }
     } else if (j == i){
         left = child;
         if (with_lock_child){
-            if (!RLU_TRY_LOCK(rlu_data, &right)){
+            if (!_mvrlu_try_lock(rlu_data, (void **)(&right), right->size)){
                 data->nr_abort++;
                 return -1;
             }
         } else {
-            if(!RLU_TRY_LOCK(rlu_data, &left) || !RLU_TRY_LOCK(rlu_data, &right)){
+            if(!_mvrlu_try_lock(rlu_data, (void **)(&left), left->size) || !_mvrlu_try_lock(rlu_data, (void **)(&right), right->size)){
                 data->nr_abort++;
                 return -1;
             }
@@ -487,12 +524,12 @@ static int node_delete(rlu_btree_t *btree, node_t **node, enum delact act,
     } else if (j == i+1){
         right = child;
         if (with_lock_child){
-            if (!RLU_TRY_LOCK(rlu_data, &left)){
+            if (!_mvrlu_try_lock(rlu_data, (void **)(&left), left->size)){
                 data->nr_abort++;
                 return -1;
             }
         } else {
-            if(!RLU_TRY_LOCK(rlu_data, &left) || !RLU_TRY_LOCK(rlu_data, &right)){
+            if(!_mvrlu_try_lock(rlu_data, (void **)(&left), left->size) || !_mvrlu_try_lock(rlu_data, (void **)(&right), right->size)){
                 data->nr_abort++;
                 return -1;
             }
@@ -504,7 +541,7 @@ static int node_delete(rlu_btree_t *btree, node_t **node, enum delact act,
         (btree->max_items-1)) 
     {
         // merge left + item + right
-        left->items[left->num_items] = (*node)->items[i], 
+        left->items[(size_t)left->num_items] = (*node)->items[(size_t)i], 
         left->num_items++;
         memcpy(left->items+sizeof(int) * left->num_items, right->items, right->num_items*sizeof(int));
         if (!left->leaf) {
@@ -515,47 +552,47 @@ static int node_delete(rlu_btree_t *btree, node_t **node, enum delact act,
         left->num_items += right->num_items;
         RLU_FREE(rlu_data, right);
         if ((*with_lock) == 0){
-            if (!RLU_TRY_LOCK(rlu_data, node)){
+            if (!_mvrlu_try_lock(rlu_data, (void **)node, (*node)->size)){
                 data->nr_abort++;
                 return -1;
             }
             *with_lock = 1;
         }
-        node_shift_left((*node), i, 1);
+        node_shift_left((*node), (size_t)i, 1);
     } else if (left->num_items > right->num_items) {
         // move left -> right
         node_shift_right(right, 0);
-        right->items[0] = (*node)->items[i];
+        right->items[0] = (*node)->items[(size_t)i];
         if (!left->leaf) {
             RLU_ASSIGN_PTR(rlu_data, &(right->children[0]), (left->children[left->num_items]));
         }
         if ((*with_lock) == 0){
-            if (!RLU_TRY_LOCK(rlu_data, node)){
+            if (!_mvrlu_try_lock(rlu_data, (void **)node, (*node)->size)){
                 data->nr_abort++;
                 return -1;
             }
             *with_lock = 1;
         }
-        (*node)->items[i] = left ->items[left->num_items-1]; 
+        (*node)->items[(size_t)i] = left ->items[left->num_items-1]; 
         if (!left->leaf) {
             left->children[left->num_items] = NULL;
         }
         left->num_items--;
     } else {
         // move right -> left
-        left->items[left->num_items] = (*node)->items[i];
+        left->items[left->num_items] = (*node)->items[(size_t)i];
         if (!left->leaf) {
             RLU_ASSIGN_PTR(rlu_data, &(left->children[left->num_items+1]), (right->children[0]));
         }
         left->num_items++;
         if ((*with_lock) == 0){
-            if (!RLU_TRY_LOCK(rlu_data, node)){
+            if (!_mvrlu_try_lock(rlu_data, (void **)node, (*node)->size)){
                 data->nr_abort++;
                 return -1;
             }
             *with_lock = 1;
         }
-        (*node)->items[i] = right->items[0];
+        (*node)->items[(size_t)i] = right->items[0];
         node_shift_left(right, 0, 0);
     }
     return deleted;
@@ -582,7 +619,7 @@ restart:
         goto restart; 
     }
     if (cur->num_items == 0) {
-        if (!RLU_TRY_LOCK(rlu_data, &prev)){
+        if (!_mvrlu_try_lock(rlu_data, (void **)(&prev), prev->size)){
             data->nr_abort ++;
             RLU_ABORT(rlu_data);
             goto restart;
@@ -607,7 +644,7 @@ int list_find(int key, pthread_data_t *data)
     node_t *node = (node_t *)RLU_DEREF(rlu_data, (btree->root->children[0]));
     for (int depth = 0;;depth++) {
         int found = 0;
-        size_t i = node_find(node, key, &found);
+        int i = node_find(node, key, &found);
         if (found) {
 	        RLU_READER_UNLOCK(rlu_data);
             return 1;
