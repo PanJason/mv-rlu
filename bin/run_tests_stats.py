@@ -96,7 +96,7 @@ perf_result_keys = [
 
 def cmd_numa_prefix(threads_num):
     if (IS_2_SOCKET):
-        if (threads_num <= 27):
+        if (threads_num <= 56):
             print('cmd_numa_prefix: BIND_CPU th_num = %d' % (threads_num,))
             return CMD_NUMA_BIND_TO_CPU_1
 
@@ -207,7 +207,7 @@ def run_test(runs_per_test, alg_type, cmd):
 
         if os.path.exists("./done") == False:
             continue
-        done = open("done", 'rb')
+        done = open("done", 'r')
         rv = done.read()
         print(rv)
         if rv == '-11':
@@ -220,13 +220,13 @@ def run_test(runs_per_test, alg_type, cmd):
 
 
         time.sleep(1)
-        f = open(OUTPUT_FILENAME, 'rb')
+        f = open(OUTPUT_FILENAME, 'r')
         output_data = f.read()
         f.close()
         os.unlink(OUTPUT_FILENAME)
 
         if (IS_PERF):
-            f = open(PERF_FILE, 'rb');
+            f = open(PERF_FILE, 'rb')
             output_data += f.read()
             f.close()
             os.unlink(PERF_FILE)
@@ -278,10 +278,10 @@ def execute(runs_per_test,
             th_num_list):
 
 
-    f_w = open(W_OUTPUT_FILENAME, 'wb')
+    f_w = open(W_OUTPUT_FILENAME, 'w')
     f_w.close()
 
-    f_out = open(output_filename, 'wb')
+    f_out = open(output_filename, 'w')
 
     cmd_header = '[%s] ' % (alg_type,) + CMD_BASE[alg_type] + ' ' + CMD_PARAMS % (
         buckets,
